@@ -5,8 +5,8 @@ import com.flipmate.app.core.util.toDecimalOrZero
 import com.flipmate.app.domain.model.AccountAsset
 import java.math.BigDecimal
 
-class AccountRepositoryImpl(private val api: PrivateApiService) {
-    suspend fun getAssets(): List<AccountAsset> = api.accountAssets().let { array ->
+class AccountRepositoryImpl(private val api: PrivateApiService) : com.flipmate.app.domain.repository.AccountRepository {
+    override suspend fun getAssets(): List<AccountAsset> = api.accountAssets().let { array ->
         (0 until array.length()).mapNotNull { index ->
             val item = array.optJSONObject(index) ?: return@mapNotNull null
             AccountAsset(
@@ -23,5 +23,5 @@ class AccountRepositoryImpl(private val api: PrivateApiService) {
             )
         }
     }
-    suspend fun settlementAsset(symbol: String): AccountAsset? = getAssets().firstOrNull { it.currency.equals(symbol.substringAfterLast('_'), true) }
+    override suspend fun settlementAsset(symbol: String): AccountAsset? = getAssets().firstOrNull { it.currency.equals(symbol.substringAfterLast('_'), true) }
 }
