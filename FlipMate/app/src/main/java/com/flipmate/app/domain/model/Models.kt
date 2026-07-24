@@ -59,9 +59,3 @@ data class FlipPlan(
     val mode: String,
     val useReverse: Boolean
 )
-
-data class CycleState(
-    val cycleNumber: Int = 1,
-    val runningPnl: BigDecimal = BigDecimal.ZERO,
-    val isProfitable: Boolean = false
-)
