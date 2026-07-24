@@ -1,24 +1,30 @@
 package com.flipmate.app
 
 import android.os.Bundle
-import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -34,21 +40,18 @@ import com.flipmate.app.data.repository.TickerRepositoryImpl
 import com.flipmate.app.domain.model.*
 import com.flipmate.app.ui.dashboard.*
 import com.flipmate.app.ui.theme.FlipMateTheme
+import com.flipmate.app.ui.theme.TerminalColors
 import java.math.BigDecimal
 import java.math.RoundingMode
 
-val CardBg = Color(0xFFFFFFFF)
-val CardAlt = Color(0xFFF6EEFF)
-val TextPrimary = Color(0xFF4A3868)
-val TextMuted = Color(0xFF9689B5)
-val LongGreen = Color(0xFF10B981)
-val ShortRed = Color(0xFFF43F5E)
-val AccentPurple = Color(0xFFC026D3)
-val AccentViolet = Color(0xFFA855F7)
-val AccentPink = Color(0xFFF472B6)
-val ResetIndigo = Color(0xFF818CF8)
-val Gold = Color(0xFFF59E0B)
-val BorderColor = Color(0xFFE8D5F5)
+// ═══════════════════════════════════════════════════════
+//  Terminal Design Aliases
+// ═══════════════════════════════════════════════════════
+private val T = TerminalColors
+private val Mono = FontFamily.Monospace
+private val Sans = FontFamily.SansSerif
+private val CardRadius = 12.dp
+private val CardInnerPad = 12.dp
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(b: Bundle?) {
@@ -86,7 +89,6 @@ fun FlipMateApp(vm: DashboardViewModel) {
         }
     }
 
-    // Error Snackbar
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(state.error) {
         state.error?.let {
@@ -95,7 +97,6 @@ fun FlipMateApp(vm: DashboardViewModel) {
         }
     }
 
-    // Confirmation Dialog
     if (state.showConfirmation && state.pendingPlan != null) {
         ConfirmationDialog(
             plan = state.pendingPlan!!,
@@ -106,28 +107,37 @@ fun FlipMateApp(vm: DashboardViewModel) {
         )
     }
 
+    val isReal = state.tradingMode == TradingMode.REAL
+
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = T.Base,
+        bottomBar = {
+            TerminalBottomNav(selectedTab = selectedTab, onTabSelected = { selectedTab = it })
+        }
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color(0xFFFDF2F8), Color(0xFFF5EBFF), Color(0xFFF3F0FF))
-                    )
-                )
+                .background(T.Base)
         ) {
+            // REAL mode: top accent border
+            if (isReal) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .background(Brush.horizontalGradient(listOf(T.ShortRed, T.MartingaleAmber, T.ShortRed)))
+                )
+            }
+
             StatusBar(
                 tradingMode = state.tradingMode,
                 wsConnected = state.wsConnected,
                 symbol = state.symbol,
                 onToggleMode = {
-                    vm.setTradingMode(
-                        if (state.tradingMode == TradingMode.SIM) TradingMode.REAL
-                        else TradingMode.SIM
-                    )
+                    vm.setTradingMode(if (state.tradingMode == TradingMode.SIM) TradingMode.REAL else TradingMode.SIM)
                 }
             )
 
@@ -140,132 +150,91 @@ fun FlipMateApp(vm: DashboardViewModel) {
                 }
             }
 
-            Column {
-                if (selectedTab == 0) {
-                    FlipBar(state, vm)
-                }
-                BottomNavBar(selectedTab = selectedTab, onTabSelected = { selectedTab = it })
+            if (selectedTab == 0) {
+                FlipBar(state, vm)
             }
         }
     }
 }
 
-@Composable
-fun ConfirmationDialog(
-    plan: FlipPlanInfo,
-    symbol: String,
-    leverage: Int,
-    onConfirm: () -> Unit,
-    onCancel: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onCancel,
-        title = {
-            Text(
-                if (plan.isReal) "⚠️ GERÇEK EMİR" else "SIM EMİR",
-                fontWeight = FontWeight.Bold,
-                color = if (plan.isReal) ShortRed else Gold
-            )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(symbol, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "${plan.currentVol} ${plan.currentSide} → ${plan.targetVol} ${plan.targetSide}",
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    "Market / Isolated / ${leverage}x",
-                    fontSize = 12.sp,
-                    color = TextMuted
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "Mod: ${plan.mode}",
-                    fontSize = 12.sp,
-                    color = if (plan.mode == "MARTINGALE") ShortRed else ResetIndigo,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    "Tahmini PnL: ${plan.estimatedPnl} USDT",
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace,
-                    color = if (plan.estimatedPnl.startsWith("-")) ShortRed else LongGreen
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = onConfirm,
-                colors = ButtonDefaults.buttonColors(containerColor = if (plan.isReal) ShortRed else AccentPurple)
-            ) {
-                Text(if (plan.isReal) "GERÇEK FLIP" else "SİMÜLE ET")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onCancel) { Text("İptal") }
-        }
-    )
-}
-
+// ═══════════════════════════════════════════════════════
+//  STATUS BAR
+// ═══════════════════════════════════════════════════════
 @Composable
 fun StatusBar(tradingMode: TradingMode, wsConnected: Boolean, symbol: String, onToggleMode: () -> Unit) {
     val isReal = tradingMode == TradingMode.REAL
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = T.Surface,
+        tonalElevation = 1.dp
     ) {
-        var time by remember { mutableStateOf("--:--:--") }
-        LaunchedEffect(Unit) {
-            while (true) {
-                val now = java.time.LocalTime.now(java.time.ZoneId.of("Europe/Istanbul"))
-                time = String.format("%02d:%02d:%02d", now.hour, now.minute, now.second)
-                kotlinx.coroutines.delay(1000)
-            }
-        }
-        Text(time, fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = TextMuted, fontWeight = FontWeight.Medium)
-
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(if (wsConnected) LongGreen else Gold)
-            )
-            Text(
-                if (wsConnected) symbol else "Bağlanıyor...",
-                fontFamily = FontFamily.Monospace,
-                fontSize = 10.sp,
-                color = TextMuted
-            )
-        }
-
-        val badgeColor = if (isReal) LongGreen else Gold
-        val badgeBg = if (isReal) Color(0x1F10B981) else Color(0x1FF59E0B)
-
-        Surface(
-            modifier = Modifier.clickable { onToggleMode() },
-            shape = RoundedCornerShape(4.dp),
-            color = badgeBg
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = if (isReal) "REAL ⇄" else "SIM ⇄",
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = badgeColor
-            )
+            // Clock
+            var time by remember { mutableStateOf("--:--:--") }
+            LaunchedEffect(Unit) {
+                while (true) {
+                    val now = java.time.LocalTime.now(java.time.ZoneId.of("Europe/Istanbul"))
+                    time = String.format("%02d:%02d:%02d", now.hour, now.minute, now.second)
+                    kotlinx.coroutines.delay(1000)
+                }
+            }
+            Text(time, fontFamily = Mono, fontSize = 11.sp, color = T.TextSecondary, fontWeight = FontWeight.Medium)
+
+            // WS Status with icon
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                if (wsConnected) {
+                    Icon(Icons.Default.SignalCellularAlt, contentDescription = "Bağlı", modifier = Modifier.size(14.dp), tint = T.LongGreen)
+                } else {
+                    Icon(Icons.Default.Sync, contentDescription = "Bağlanıyor", modifier = Modifier.size(14.dp), tint = T.PendingAmber)
+                }
+                Text(symbol, fontFamily = Mono, fontSize = 10.sp, color = if (wsConnected) T.LongGreen else T.PendingAmber, fontWeight = FontWeight.Medium)
+            }
+
+            // SIM/REAL toggle with icons
+            Surface(
+                modifier = Modifier
+                    .clickable { onToggleMode() }
+                    .border(
+                        width = 1.dp,
+                        color = if (isReal) T.ShortRed.copy(alpha = 0.4f) else T.MartingaleAmber.copy(alpha = 0.3f),
+                        shape = RoundedCornerShape(6.dp)
+                    ),
+                shape = RoundedCornerShape(6.dp),
+                color = if (isReal) T.ShortRedDim else T.MartingaleAmberDim
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isReal) Icons.Default.Shield else Icons.Default.Science,
+                        contentDescription = null,
+                        modifier = Modifier.size(12.dp),
+                        tint = if (isReal) T.ShortRed else T.MartingaleAmber
+                    )
+                    Text(
+                        text = if (isReal) "REAL" else "SIM",
+                        fontFamily = Mono,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isReal) T.ShortRed else T.MartingaleAmber
+                    )
+                }
+            }
         }
     }
 }
 
+// ═══════════════════════════════════════════════════════
+//  PANEL TAB
+// ═══════════════════════════════════════════════════════
 @Composable
 fun PanelTab(state: DashboardUiState, vm: DashboardViewModel, symbol: String, onSymbolChange: (String) -> Unit) {
     Column(
@@ -273,8 +242,8 @@ fun PanelTab(state: DashboardUiState, vm: DashboardViewModel, symbol: String, on
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 10.dp)
-            .padding(bottom = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+            .padding(bottom = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         PriceCard(state, symbol, onSymbolChange)
         CycleBar(state)
@@ -286,175 +255,261 @@ fun PanelTab(state: DashboardUiState, vm: DashboardViewModel, symbol: String, on
     }
 }
 
+// ═══════════════════════════════════════════════════════
+//  PRICE CARD
+// ═══════════════════════════════════════════════════════
 @Composable
 fun PriceCard(state: DashboardUiState, symbol: String, onSymbolChange: (String) -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBg)
-    ) {
-        Column(modifier = Modifier.padding(10.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = symbol,
-                    onValueChange = onSymbolChange,
-                    modifier = Modifier.width(120.dp),
-                    singleLine = true,
-                    textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = BorderColor, unfocusedBorderColor = BorderColor, focusedContainerColor = CardAlt, unfocusedContainerColor = CardAlt),
-                    shape = RoundedCornerShape(10.dp)
+    TerminalCard(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = symbol,
+                onValueChange = onSymbolChange,
+                modifier = Modifier.width(130.dp),
+                singleLine = true,
+                textStyle = LocalTextStyle.current.copy(fontFamily = Mono, fontSize = 12.sp, fontWeight = FontWeight.Bold),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = T.BorderStrong,
+                    unfocusedBorderColor = T.Border,
+                    focusedContainerColor = T.Elevated,
+                    unfocusedContainerColor = T.Elevated,
+                    focusedTextColor = T.TextPrimary,
+                    unfocusedTextColor = T.TextPrimary,
+                    cursorColor = T.AccentCyan
+                ),
+                shape = RoundedCornerShape(8.dp)
+            )
+            Spacer(Modifier.weight(1f))
+            Column(horizontalAlignment = Alignment.End) {
+                val price = state.ticker?.lastPrice
+                Text(
+                    "$ ${price?.let { formatPrice(it) } ?: "0.00"}",
+                    fontFamily = Mono, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = T.TextPrimary
                 )
-                Spacer(Modifier.weight(1f))
-                Column(horizontalAlignment = Alignment.End) {
-                    val price = state.ticker?.lastPrice
-                    Text("$ ${price?.let { formatPrice(it) } ?: "0.00"}", fontFamily = FontFamily.Monospace, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    val change = state.ticker?.priceChangePercent
-                    val isUp = change != null && change >= BigDecimal.ZERO
+                val change = state.ticker?.priceChangePercent
+                val isUp = change != null && change >= BigDecimal.ZERO
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Icon(
+                        if (isUp) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = if (isUp) T.LongGreen else T.ShortRed
+                    )
                     Text(
                         "${if (isUp) "+" else ""}${change?.let { (it * BigDecimal("100")).setScale(2, RoundingMode.HALF_UP) }?.toPlainString() ?: "0.00"}%",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (isUp) LongGreen else ShortRed
+                        fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                        fontFamily = Mono,
+                        color = if (isUp) T.LongGreen else T.ShortRed
                     )
                 }
             }
-            Spacer(Modifier.height(6.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                val t = state.ticker
-                PriceLabel("24H↑", t?.high24h?.let { formatPrice(it) } ?: "-")
-                PriceLabel("24H↓", t?.low24h?.let { formatPrice(it) } ?: "-")
-                PriceLabel("Fair", t?.fairPrice?.let { formatPrice(it) } ?: "-")
-            }
+        }
+        Spacer(Modifier.height(8.dp))
+        // 24H stats row
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            val t = state.ticker
+            PriceStat("24H HIGH", t?.high24h?.let { formatPrice(it) } ?: "—", T.TextSecondary)
+            PriceStat("24H LOW", t?.low24h?.let { formatPrice(it) } ?: "—", T.TextSecondary)
+            PriceStat("FAIR", t?.fairPrice?.let { formatPrice(it) } ?: "—", T.AccentCyan)
         }
     }
 }
 
 @Composable
-fun PriceLabel(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, fontSize = 9.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
-        Text(value, fontSize = 10.sp, color = TextPrimary, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium)
+private fun PriceStat(label: String, value: String, valueColor: Color) {
+    Column {
+        Text(label, fontSize = 9.sp, color = T.TextMuted, fontFamily = Mono, fontWeight = FontWeight.Medium, letterSpacing = 0.5.sp)
+        Text(value, fontSize = 11.sp, color = valueColor, fontFamily = Mono, fontWeight = FontWeight.Bold)
     }
 }
 
+// ═══════════════════════════════════════════════════════
+//  CYCLE BAR
+// ═══════════════════════════════════════════════════════
 @Composable
 fun CycleBar(state: DashboardUiState) {
     val cycle = state.cycleState
     val pnl = cycle.runningPnl
     val isProfitable = pnl > BigDecimal.ZERO
+    val pnlColor = if (isProfitable) T.LongGreen else if (pnl < BigDecimal.ZERO) T.ShortRed else T.TextMuted
 
-    Card(
+    TerminalCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5EBFF))
+        containerColor = if (isProfitable) T.LongGreenDim else if (pnl < BigDecimal.ZERO) T.ShortRedDim else T.SurfaceVariant
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Cycle number
             Column {
-                Text("Döngü", fontSize = 9.sp, color = TextMuted, fontWeight = FontWeight.Medium)
-                Text("# ${cycle.cycleNumber}", fontFamily = FontFamily.Monospace, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = AccentViolet)
+                Text("CYCLE", fontSize = 9.sp, color = T.TextMuted, fontFamily = Mono, fontWeight = FontWeight.Medium, letterSpacing = 0.8.sp)
+                Text("#${cycle.cycleNumber}", fontFamily = Mono, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = T.AccentPurple)
             }
+            // Running PnL
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Genel Toplam", fontSize = 9.sp, color = TextMuted, fontWeight = FontWeight.Medium)
+                Text("RUNNING PNL", fontSize = 9.sp, color = T.TextMuted, fontFamily = Mono, fontWeight = FontWeight.Medium, letterSpacing = 0.8.sp)
                 Text(
-                    "${if (pnl >= BigDecimal.ZERO) "+" else ""}$ ${pnl.setScale(2, RoundingMode.HALF_UP).toPlainString()}",
-                    fontFamily = FontFamily.Monospace, fontSize = 15.sp, fontWeight = FontWeight.Bold,
-                    color = if (isProfitable) LongGreen else if (pnl < BigDecimal.ZERO) ShortRed else TextMuted
+                    "${if (pnl >= BigDecimal.ZERO) "+" else ""}$${pnl.setScale(2, RoundingMode.HALF_UP).toPlainString()}",
+                    fontFamily = Mono, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = pnlColor
                 )
             }
-            Column(horizontalAlignment = Alignment.End) {
-                Text("Durum", fontSize = 9.sp, color = TextMuted, fontWeight = FontWeight.Medium)
+            // Status badge
+            Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = pnlColor.copy(alpha = 0.15f)
+            ) {
                 Text(
-                    text = if (isProfitable) "Karda" else if (pnl < BigDecimal.ZERO) "Zararda" else "Başa baş",
-                    fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
-                    color = if (isProfitable) LongGreen else if (pnl < BigDecimal.ZERO) ShortRed else TextMuted
+                    text = if (isProfitable) "PROFIT" else if (pnl < BigDecimal.ZERO) "LOSS" else "BREAK",
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = Mono,
+                    color = pnlColor,
+                    letterSpacing = 0.5.sp
                 )
             }
         }
     }
 }
 
+// ═══════════════════════════════════════════════════════
+//  ACCOUNT CARD (REAL mode)
+// ═══════════════════════════════════════════════════════
 @Composable
 fun AccountCard(state: DashboardUiState) {
     val asset = state.account ?: return
-    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = CardBg)) {
-        Column(modifier = Modifier.padding(10.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("REAL Kasa", fontSize = 9.sp, color = TextMuted, fontWeight = FontWeight.Medium)
-                Spacer(Modifier.width(6.dp))
-                Surface(shape = RoundedCornerShape(4.dp), color = Color(0x1F10B981)) {
-                    Text(asset.currency, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontFamily = FontFamily.Monospace, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = LongGreen)
-                }
+    TerminalCard(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.AccountBalance, contentDescription = null, modifier = Modifier.size(16.dp), tint = T.LongGreen)
+            Spacer(Modifier.width(6.dp))
+            Text("REAL KASA", fontSize = 10.sp, color = T.TextMuted, fontFamily = Mono, fontWeight = FontWeight.Medium, letterSpacing = 0.8.sp)
+            Spacer(Modifier.weight(1f))
+            Surface(shape = RoundedCornerShape(4.dp), color = T.LongGreenDim) {
+                Text(asset.currency, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontFamily = Mono, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = T.LongGreen)
             }
-            Spacer(Modifier.height(6.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column { Text("Toplam Equity", fontSize = 9.sp, color = TextMuted); Text("$${asset.equity.setScale(2, RoundingMode.HALF_UP)}", fontFamily = FontFamily.Monospace, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("Kullanılabilir", fontSize = 9.sp, color = TextMuted); Text("$${asset.availableOpen.setScale(2, RoundingMode.HALF_UP)}", fontFamily = FontFamily.Monospace, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = LongGreen) }
-                Column(horizontalAlignment = Alignment.End) { Text("Poz. Margin", fontSize = 9.sp, color = TextMuted); Text("$${asset.positionMargin.setScale(2, RoundingMode.HALF_UP)}", fontFamily = FontFamily.Monospace, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Column { Text("EQUITY", fontSize = 9.sp, color = T.TextMuted, fontFamily = Mono); Text("$${asset.equity.setScale(2, RoundingMode.HALF_UP)}", fontFamily = Mono, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = T.TextPrimary) }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("AVAILABLE", fontSize = 9.sp, color = T.TextMuted, fontFamily = Mono); Text("$${asset.availableOpen.setScale(2, RoundingMode.HALF_UP)}", fontFamily = Mono, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = T.LongGreen) }
+            Column(horizontalAlignment = Alignment.End) { Text("POS MARGIN", fontSize = 9.sp, color = T.TextMuted, fontFamily = Mono); Text("$${asset.positionMargin.setScale(2, RoundingMode.HALF_UP)}", fontFamily = Mono, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = T.TextSecondary) }
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Column { Text("CASH", fontSize = 9.sp, color = T.TextMuted, fontFamily = Mono); Text("$${asset.cashBalance.setScale(2, RoundingMode.HALF_UP)}", fontFamily = Mono, fontSize = 11.sp, color = T.TextSecondary) }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("UNREALIZED", fontSize = 9.sp, color = T.TextMuted, fontFamily = Mono)
+                val isUp = asset.unrealized >= BigDecimal.ZERO
+                Text("${if (isUp) "+" else ""}$${asset.unrealized.setScale(2, RoundingMode.HALF_UP)}", fontFamily = Mono, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isUp) T.LongGreen else T.ShortRed)
             }
-            Spacer(Modifier.height(4.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column { Text("Cash", fontSize = 9.sp, color = TextMuted); Text("$${asset.cashBalance.setScale(2, RoundingMode.HALF_UP)}", fontFamily = FontFamily.Monospace, fontSize = 11.sp) }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Unrealized", fontSize = 9.sp, color = TextMuted)
-                    val isUp = asset.unrealized >= BigDecimal.ZERO
-                    Text("${if (isUp) "+" else ""}$${asset.unrealized.setScale(2, RoundingMode.HALF_UP)}", fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = if (isUp) LongGreen else ShortRed)
-                }
-                Column(horizontalAlignment = Alignment.End) { Text("Frozen/Bonus", fontSize = 9.sp, color = TextMuted); Text("$${asset.frozenBalance.setScale(2, RoundingMode.HALF_UP)} / $${asset.bonus.setScale(2, RoundingMode.HALF_UP)}", fontFamily = FontFamily.Monospace, fontSize = 11.sp) }
-            }
+            Column(horizontalAlignment = Alignment.End) { Text("FROZEN/BONUS", fontSize = 9.sp, color = T.TextMuted, fontFamily = Mono); Text("$${asset.frozenBalance.setScale(2, RoundingMode.HALF_UP)} / $${asset.bonus.setScale(2, RoundingMode.HALF_UP)}", fontFamily = Mono, fontSize = 10.sp, color = T.TextSecondary) }
         }
     }
 }
 
+// ═══════════════════════════════════════════════════════
+//  POSITION CARD (high priority)
+// ═══════════════════════════════════════════════════════
 @Composable
 fun PositionCard(state: DashboardUiState) {
     val pos = state.position
     val isLong = pos?.side == PositionSide.LONG
-    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = CardBg)) {
-        Column(modifier = Modifier.padding(10.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Pozisyon", fontSize = 9.sp, color = TextMuted, fontWeight = FontWeight.Medium)
-                    Spacer(Modifier.width(6.dp))
-                    if (pos != null) {
-                        Surface(shape = RoundedCornerShape(4.dp), color = if (isLong) Color(0x1F10B981) else Color(0x1FF43F5E)) {
-                            Text(pos.side.name, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (isLong) LongGreen else ShortRed)
+
+    TerminalCard(
+        modifier = Modifier.fillMaxWidth(),
+        borderColor = if (pos != null) (if (isLong) T.LongGreen else T.ShortRed).copy(alpha = 0.3f) else T.Border,
+        containerColor = T.Elevated
+    ) {
+        // Header row
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("POSITION", fontSize = 10.sp, color = T.TextMuted, fontFamily = Mono, fontWeight = FontWeight.Medium, letterSpacing = 0.8.sp)
+                Spacer(Modifier.width(8.dp))
+                if (pos != null) {
+                    Surface(shape = RoundedCornerShape(4.dp), color = if (isLong) T.LongGreenDim else T.ShortRedDim) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                if (isLong) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp),
+                                tint = if (isLong) T.LongGreen else T.ShortRed
+                            )
+                            Text(pos.side.name, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = Mono, color = if (isLong) T.LongGreen else T.ShortRed)
                         }
-                        Spacer(Modifier.width(6.dp))
-                        Text("${pos.holdVol}c", fontFamily = FontFamily.Monospace, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                        Text("${pos.leverage}x", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = TextMuted)
-                    } else {
-                        Surface(shape = RoundedCornerShape(4.dp), color = Color(0x1F64748B)) {
-                            Text("YOK", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 10.sp, color = TextMuted)
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    Text("${pos.holdVol}c", fontFamily = Mono, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = T.TextPrimary)
+                    Text("${pos.leverage}x", fontFamily = Mono, fontSize = 10.sp, color = T.TextMuted, modifier = Modifier.padding(start = 4.dp))
+                } else {
+                    Surface(shape = RoundedCornerShape(4.dp), color = T.SurfaceVariant) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(Icons.Default.RemoveCircleOutline, contentDescription = null, modifier = Modifier.size(12.dp), tint = T.TextMuted)
+                            Text("NO POSITION", fontSize = 11.sp, color = T.TextMuted, fontFamily = Mono)
                         }
                     }
                 }
-                if (pos != null) {
-                    val isUp = pos.unrealizedPnl >= BigDecimal.ZERO
-                    val pnlPct = if (pos.margin > BigDecimal.ZERO) (pos.unrealizedPnl / pos.margin * BigDecimal("100")).setScale(1, RoundingMode.HALF_UP) else BigDecimal.ZERO
-                    Text("${if (isUp) "+" else ""}$${pos.unrealizedPnl.setScale(2, RoundingMode.HALF_UP)} (${if (isUp) "+" else ""}${pnlPct}%)", fontFamily = FontFamily.Monospace, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isUp) LongGreen else ShortRed)
-                } else {
-                    Text("$0.00 (+0.0%)", fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = TextMuted)
+            }
+
+            if (pos != null) {
+                val isUp = pos.unrealizedPnl >= BigDecimal.ZERO
+                val pnlPct = if (pos.margin > BigDecimal.ZERO) (pos.unrealizedPnl / pos.margin * BigDecimal("100")).setScale(1, RoundingMode.HALF_UP) else BigDecimal.ZERO
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        "${if (isUp) "+" else ""}$${pos.unrealizedPnl.setScale(2, RoundingMode.HALF_UP)}",
+                        fontFamily = Mono, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                        color = if (isUp) T.LongGreen else T.ShortRed
+                    )
+                    Text(
+                        "${if (isUp) "+" else ""}${pnlPct}%",
+                        fontFamily = Mono, fontSize = 10.sp,
+                        color = if (isUp) T.LongGreen else T.ShortRed
+                    )
                 }
             }
-            Spacer(Modifier.height(6.dp))
+        }
+
+        if (pos != null) {
+            Spacer(Modifier.height(8.dp))
             // PnL Bar
-            Box(modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)).background(CardAlt)) {
-                Box(modifier = Modifier.fillMaxHeight().width(1.dp).align(Alignment.Center).background(BorderColor))
+            val pnlPct = if (pos.margin > BigDecimal.ZERO) ((pos.unrealizedPnl / pos.margin) * BigDecimal("100")).toFloat().coerceIn(-100f, 100f) else 0f
+            Box(modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(T.Base)) {
+                Box(modifier = Modifier.fillMaxHeight().width(1.dp).align(Alignment.Center).background(T.Border))
+                if (pnlPct != 0f) {
+                    val halfWidth = (kotlin.math.abs(pnlPct) / 200f).coerceIn(0.005f, 0.5f)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(halfWidth)
+                            .align(if (pnlPct >= 0) Alignment.CenterStart else Alignment.CenterEnd)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(if (pnlPct >= 0) T.LongGreen else T.ShortRed)
+                    )
+                }
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(8.dp))
+            // Data row
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column { Text("Entry", fontSize = 9.sp, color = TextMuted); Text(pos?.let { "$${formatPrice(it.entryPrice)}" } ?: "-", fontFamily = FontFamily.Monospace, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("Liq", fontSize = 9.sp, color = TextMuted); Text(pos?.let { "$${formatPrice(it.liquidationPrice)}" } ?: "-", fontFamily = FontFamily.Monospace, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
-                Column(horizontalAlignment = Alignment.End) { Text("Margin", fontSize = 9.sp, color = TextMuted); Text(pos?.let { "$${it.margin.setScale(2, RoundingMode.HALF_UP)}" } ?: "$0.00", fontFamily = FontFamily.Monospace, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
+                Column { Text("ENTRY", fontSize = 9.sp, color = T.TextMuted, fontFamily = Mono, letterSpacing = 0.5.sp); Text("$${formatPrice(pos.entryPrice)}", fontFamily = Mono, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = T.TextPrimary) }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("LIQ", fontSize = 9.sp, color = T.TextMuted, fontFamily = Mono, letterSpacing = 0.5.sp); Text("$${formatPrice(pos.liquidationPrice)}", fontFamily = Mono, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = T.ShortRed) }
+                Column(horizontalAlignment = Alignment.End) { Text("MARGIN", fontSize = 9.sp, color = T.TextMuted, fontFamily = Mono, letterSpacing = 0.5.sp); Text("$${pos.margin.setScale(2, RoundingMode.HALF_UP)}", fontFamily = Mono, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = T.TextSecondary) }
             }
         }
     }
 }
 
+// ═══════════════════════════════════════════════════════
+//  LADDER CARD (Martingale)
+// ═══════════════════════════════════════════════════════
 @Composable
 fun LadderCard(state: DashboardUiState) {
     val steps = mutableListOf<BigDecimal>()
@@ -463,22 +518,51 @@ fun LadderCard(state: DashboardUiState) {
     val currentSize = state.position?.holdVol ?: state.resetSize
     val currentIdx = steps.indexOf(currentSize)
 
-    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = CardBg)) {
-        Column(modifier = Modifier.padding(10.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Martingale Serisi (kontrat)", fontSize = 9.sp, color = TextMuted, fontWeight = FontWeight.Medium)
-                Text(if (currentIdx >= 0) "${currentIdx + 1}/${steps.size}" else "~${currentSize}c", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = TextMuted)
-            }
-            Spacer(Modifier.height(4.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                steps.forEachIndexed { idx, step ->
-                    val isActive = idx == currentIdx
-                    val isPast = currentIdx >= 0 && idx < currentIdx
+    TerminalCard(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("MARTINGALE LADDER", fontSize = 10.sp, color = T.TextMuted, fontFamily = Mono, fontWeight = FontWeight.Medium, letterSpacing = 0.8.sp)
+            Text(if (currentIdx >= 0) "${currentIdx + 1}/${steps.size}" else "~${currentSize}c", fontFamily = Mono, fontSize = 10.sp, color = T.TextSecondary)
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+            steps.forEachIndexed { idx, step ->
+                if (idx > 0) {
+                    // Connector line
+                    val isPast = currentIdx >= 0 && idx <= currentIdx
                     Box(
-                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(7.dp)).background(if (isActive) Color(0x24C026D3) else if (isPast) Color(0x24818CF8) else CardAlt).padding(vertical = 3.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(step.toPlainString(), fontFamily = FontFamily.Monospace, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = if (isActive) AccentPurple else if (isPast) ResetIndigo else TextMuted)
+                        modifier = Modifier
+                            .width(4.dp)
+                            .height(2.dp)
+                            .background(if (isPast) T.MartingaleAmber else T.Border, RoundedCornerShape(1.dp))
+                    )
+                }
+                val isActive = idx == currentIdx
+                val isPast = currentIdx >= 0 && idx < currentIdx
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(
+                            when {
+                                isActive -> T.MartingaleAmberDim
+                                isPast -> T.SurfaceVariant
+                                else -> T.SurfaceVariant
+                            }
+                        )
+                        .then(
+                            if (isActive) Modifier.border(1.dp, T.MartingaleAmber, RoundedCornerShape(6.dp))
+                            else Modifier
+                        )
+                        .padding(vertical = 5.dp, horizontal = 2.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isPast) {
+                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(12.dp), tint = T.MartingaleAmber.copy(alpha = 0.7f))
+                    } else if (isActive) {
+                        Icon(Icons.Default.RadioButtonChecked, contentDescription = null, modifier = Modifier.size(12.dp), tint = T.MartingaleAmber)
+                    } else {
+                        Text(step.toPlainString(), fontFamily = Mono, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = T.TextMuted)
                     }
                 }
             }
@@ -486,63 +570,168 @@ fun LadderCard(state: DashboardUiState) {
     }
 }
 
+// ═══════════════════════════════════════════════════════
+//  MODE HINT (KARAR) CARD
+// ═══════════════════════════════════════════════════════
 @Composable
 fun ModeHintCard(state: DashboardUiState) {
     val pos = state.position
     val cycle = state.cycleState
     val isProfitable = cycle.runningPnl > BigDecimal.ZERO
-    val bgColor: Color; val borderColorVal: Color; val textColor: Color; val message: String
+
+    val borderColor: Color
+    val bgColor: Color
+    val textColor: Color
+    val icon: ImageVector
+    val message: String
+
     when {
-        isProfitable && state.resetAction == ResetAction.STOP -> { bgColor = Color(0x1FF43F5E); borderColorVal = Color(0x40F43F5E); textColor = ShortRed; message = "Equity kârda → KAPAT & DURDUR" }
-        isProfitable -> { val rs = state.resetAction.name; bgColor = Color(0x24818CF8); borderColorVal = Color(0x4D818CF8); textColor = Color(0xFF6366F1); message = "Equity kârda → SIFIRLA ${state.resetSize} $rs" }
-        else -> { val newSide = pos?.side?.opposite?.name ?: "SHORT"; val newSize = pos?.holdVol?.times(BigDecimal("2")) ?: BigDecimal.ZERO; bgColor = if (cycle.runningPnl < BigDecimal.ZERO) Color(0x1FF43F5E) else Color(0x1F64748B); borderColorVal = if (cycle.runningPnl < BigDecimal.ZERO) Color(0x40F43F5E) else Color(0x3864748B); textColor = if (cycle.runningPnl < BigDecimal.ZERO) ShortRed else Color(0xFF475569); message = "Zararda → MARTINGALE → $newSize $newSide" }
+        isProfitable && state.resetAction == ResetAction.STOP -> {
+            borderColor = T.ShortRed.copy(alpha = 0.4f)
+            bgColor = T.ShortRedDim
+            textColor = T.ShortRed
+            icon = Icons.Default.StopCircle
+            message = "Equity kârda → KAPAT & DURDUR"
+        }
+        isProfitable -> {
+            borderColor = T.LongGreen.copy(alpha = 0.3f)
+            bgColor = T.LongGreenDim
+            textColor = T.LongGreen
+            icon = Icons.Default.CheckCircleOutline
+            message = "Equity kârda → SIFIRLA ${state.resetSize} ${state.resetAction.name}"
+        }
+        else -> {
+            val newSide = pos?.side?.opposite?.name ?: "SHORT"
+            val newSize = pos?.holdVol?.times(BigDecimal("2")) ?: BigDecimal.ZERO
+            borderColor = T.MartingaleAmber.copy(alpha = 0.4f)
+            bgColor = T.MartingaleAmberDim
+            textColor = T.MartingaleAmber
+            icon = Icons.Default.WarningAmber
+            message = "Zararda → MARTINGALE → $newSize $newSide"
+        }
     }
-    Surface(modifier = Modifier.fillMaxWidth().border(1.dp, borderColorVal, RoundedCornerShape(8.dp)), shape = RoundedCornerShape(8.dp), color = bgColor) {
-        Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("KARAR:", fontFamily = FontFamily.Monospace, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = textColor)
-            Spacer(Modifier.width(6.dp))
-            Text(message, fontSize = 11.sp, color = textColor)
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, borderColor, RoundedCornerShape(10.dp)),
+        shape = RoundedCornerShape(10.dp),
+        color = bgColor
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = textColor)
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text("SIGNAL", fontSize = 9.sp, color = textColor.copy(alpha = 0.6f), fontFamily = Mono, fontWeight = FontWeight.Medium, letterSpacing = 0.8.sp)
+                Text(message, fontSize = 13.sp, color = textColor, fontWeight = FontWeight.SemiBold)
+            }
         }
     }
 }
 
+// ═══════════════════════════════════════════════════════
+//  SETTINGS ROW (Leverage, Count, Max)
+// ═══════════════════════════════════════════════════════
 @Composable
 fun SettingsRow(state: DashboardUiState, vm: DashboardViewModel) {
     var selectedLev by remember { mutableIntStateOf(state.leverage) }
+
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         // Leverage
         Column(modifier = Modifier.weight(1f)) {
-            Text("Leverage", fontSize = 9.sp, color = TextMuted, fontWeight = FontWeight.Medium)
+            Text("LEVERAGE", fontSize = 9.sp, color = T.TextMuted, fontFamily = Mono, fontWeight = FontWeight.Medium, letterSpacing = 0.8.sp)
             var expanded by remember { mutableStateOf(false) }
             Box {
-                Surface(modifier = Modifier.fillMaxWidth().clickable { expanded = true }.clip(RoundedCornerShape(10.dp)).border(1.dp, BorderColor, RoundedCornerShape(10.dp)), color = CardAlt) {
-                    Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("${selectedLev}x", fontFamily = FontFamily.Monospace, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text("▼", fontSize = 8.sp, color = TextMuted)
+                Surface(
+                    modifier = Modifier.fillMaxWidth().clickable { expanded = true },
+                    shape = RoundedCornerShape(8.dp),
+                    color = T.Elevated,
+                    border = androidx.compose.foundation.border(1.dp, T.Border, RoundedCornerShape(8.dp)).let { Modifier }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, T.Border, RoundedCornerShape(8.dp))
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("${selectedLev}x", fontFamily = Mono, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = T.TextPrimary)
+                            // Risk indicator
+                            val riskColor = when {
+                                selectedLev <= 10 -> T.LongGreen
+                                selectedLev <= 20 -> T.MartingaleAmber
+                                else -> T.ShortRed
+                            }
+                            Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(riskColor))
+                        }
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(16.dp), tint = T.TextMuted)
                     }
                 }
-                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, containerColor = T.Elevated) {
                     listOf(5, 10, 20, 50, 100).forEach { lev ->
-                        DropdownMenuItem(text = { Text("${lev}x", fontFamily = FontFamily.Monospace) }, onClick = { selectedLev = lev; vm.setLeverage(lev); expanded = false })
+                        DropdownMenuItem(
+                            text = {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    val rc = when {
+                                        lev <= 10 -> T.LongGreen
+                                        lev <= 20 -> T.MartingaleAmber
+                                        else -> T.ShortRed
+                                    }
+                                    Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(rc))
+                                    Text("${lev}x", fontFamily = Mono, fontWeight = FontWeight.SemiBold, color = T.TextPrimary)
+                                    Text(
+                                        when { lev <= 10 -> "LOW"; lev <= 20 -> "MED"; else -> "HIGH" },
+                                        fontFamily = Mono, fontSize = 10.sp, color = rc
+                                    )
+                                }
+                            },
+                            onClick = { selectedLev = lev; vm.setLeverage(lev); expanded = false }
+                        )
                     }
                 }
             }
         }
         // Count
         Column(modifier = Modifier.weight(1f)) {
-            Text("Count", fontSize = 9.sp, color = TextMuted, fontWeight = FontWeight.Medium)
+            Text("COUNT", fontSize = 9.sp, color = T.TextMuted, fontFamily = Mono, fontWeight = FontWeight.Medium, letterSpacing = 0.8.sp)
             var sizeText by remember { mutableStateOf(state.resetSize.toPlainString()) }
-            OutlinedTextField(value = sizeText, onValueChange = { sizeText = it; it.toIntOrNull()?.let { v -> vm.setResetSize(BigDecimal(v)) } }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp, fontWeight = FontWeight.SemiBold), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = BorderColor, unfocusedBorderColor = BorderColor, focusedContainerColor = CardAlt, unfocusedContainerColor = CardAlt), shape = RoundedCornerShape(10.dp))
+            OutlinedTextField(
+                value = sizeText,
+                onValueChange = { sizeText = it; it.toIntOrNull()?.let { v -> vm.setResetSize(BigDecimal(v)) } },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                textStyle = LocalTextStyle.current.copy(fontFamily = Mono, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = T.TextPrimary),
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = T.BorderStrong, unfocusedBorderColor = T.Border, focusedContainerColor = T.Elevated, unfocusedContainerColor = T.Elevated, cursorColor = T.AccentCyan),
+                shape = RoundedCornerShape(8.dp)
+            )
         }
         // Max
         Column(modifier = Modifier.weight(1f)) {
-            Text("Max", fontSize = 9.sp, color = TextMuted, fontWeight = FontWeight.Medium)
+            Text("MAX", fontSize = 9.sp, color = T.TextMuted, fontFamily = Mono, fontWeight = FontWeight.Medium, letterSpacing = 0.8.sp)
             var maxText by remember { mutableStateOf(state.maxContracts.toPlainString()) }
-            OutlinedTextField(value = maxText, onValueChange = { maxText = it; it.toIntOrNull()?.let { v -> vm.setMaxContracts(BigDecimal(v)) } }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp, fontWeight = FontWeight.SemiBold), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = BorderColor, unfocusedBorderColor = BorderColor, focusedContainerColor = CardAlt, unfocusedContainerColor = CardAlt), shape = RoundedCornerShape(10.dp))
+            OutlinedTextField(
+                value = maxText,
+                onValueChange = { maxText = it; it.toIntOrNull()?.let { v -> vm.setMaxContracts(BigDecimal(v)) } },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                textStyle = LocalTextStyle.current.copy(fontFamily = Mono, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = T.TextPrimary),
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = T.BorderStrong, unfocusedBorderColor = T.Border, focusedContainerColor = T.Elevated, unfocusedContainerColor = T.Elevated, cursorColor = T.AccentCyan),
+                shape = RoundedCornerShape(8.dp)
+            )
         }
     }
 }
 
+// ═══════════════════════════════════════════════════════
+//  FLIP CTA BUTTON
+// ═══════════════════════════════════════════════════════
 @Composable
 fun FlipBar(state: DashboardUiState, vm: DashboardViewModel) {
     val pos = state.position
@@ -558,51 +747,187 @@ fun FlipBar(state: DashboardUiState, vm: DashboardViewModel) {
         }
         else -> { val ns = pos.side.opposite.name; val nv = pos.holdVol * BigDecimal("2"); "$nv $ns (seri devam)" }
     }
-    val gradient = if (state.isFlipping) Brush.linearGradient(listOf(Color(0xFF64748B), Color(0xFF64748B))) else Brush.linearGradient(listOf(AccentPurple, AccentViolet, AccentPink))
 
-    Column(modifier = Modifier.fillMaxWidth().background(Color(0xFFFAF3FF)).padding(horizontal = 10.dp, vertical = 6.dp)) {
-        Button(
-            onClick = { vm.flip() },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !state.isFlipping && pos != null,
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-            contentPadding = PaddingValues(vertical = 12.dp)
-        ) {
-            Box(modifier = Modifier.fillMaxWidth().background(gradient, RoundedCornerShape(12.dp)).padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
+    val isReal = state.tradingMode == TradingMode.REAL
+    val btnBg = when {
+        state.isFlipping -> T.TextMuted
+        isReal && !state.isFlipping -> T.ShortRed
+        else -> T.AccentPurple
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = T.Surface,
+        tonalElevation = 2.dp
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Button(
+                onClick = { vm.flip() },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                enabled = !state.isFlipping && pos != null,
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = btnBg,
+                    disabledContainerColor = btnBg.copy(alpha = 0.5f),
+                    contentColor = Color.White
+                ),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+            ) {
                 if (state.isFlipping) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
-                        Spacer(Modifier.width(8.dp))
-                        Text("İşleniyor...", color = Color.White, fontWeight = FontWeight.Bold)
-                    }
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Text("İŞLENİYOR", fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 14.sp, letterSpacing = 1.sp)
                 } else {
-                    Text("🔄 FLIP & 2X", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("FLIP & 2X", fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 14.sp, letterSpacing = 1.sp)
                 }
             }
+            Text(
+                text = preview,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+                fontSize = 10.sp,
+                color = T.TextMuted,
+                fontFamily = Mono
+            )
         }
-        Text(text = preview, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center, fontSize = 10.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
     }
 }
 
+// ═══════════════════════════════════════════════════════
+//  BOTTOM NAVIGATION BAR
+// ═══════════════════════════════════════════════════════
 @Composable
-fun BottomNavBar(selectedTab: Int, onTabSelected: (Int) -> Unit) {
-    val tabs = listOf("Panel", "Log", "Emirler", "Ayarlar")
-    Surface(modifier = Modifier.fillMaxWidth(), color = Color(0xFFFAF4FF)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            tabs.forEachIndexed { idx, label ->
-                val isSelected = idx == selectedTab
-                Column(modifier = Modifier.clickable { onTabSelected(idx) }.padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(label, fontSize = 12.sp, color = if (isSelected) AccentPurple else TextMuted, fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal)
-                    if (isSelected) {
-                        Box(modifier = Modifier.width(20.dp).height(2.dp).background(AccentPurple, RoundedCornerShape(1.dp)))
-                    } else { Spacer(Modifier.height(2.dp)) }
-                }
-            }
+fun TerminalBottomNav(selectedTab: Int, onTabSelected: (Int) -> Unit) {
+    NavigationBar(
+        containerColor = T.Surface,
+        contentColor = T.TextPrimary,
+        tonalElevation = 2.dp,
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, T.Border)
+    ) {
+        data class NavItem(val label: String, val activeIcon: ImageVector, val inactiveIcon: ImageVector)
+        val items = listOf(
+            NavItem("Panel", Icons.Default.Dashboard, Icons.Default.Dashboard),
+            NavItem("Log", Icons.Default.ReceiptLong, Icons.Default.ReceiptLong),
+            NavItem("Emirler", Icons.Default.FactCheck, Icons.Default.FactCheck),
+            NavItem("Ayarlar", Icons.Default.Settings, Icons.Default.Settings)
+        )
+
+        items.forEachIndexed { idx, item ->
+            val selected = idx == selectedTab
+            NavigationBarItem(
+                selected = selected,
+                onClick = { onTabSelected(idx) },
+                icon = {
+                    Icon(
+                        imageVector = if (selected) item.activeIcon else item.inactiveIcon,
+                        contentDescription = item.label,
+                        modifier = Modifier.size(20.dp),
+                        tint = if (selected) T.AccentPurple else T.TextMuted
+                    )
+                },
+                label = {
+                    Text(
+                        item.label,
+                        fontFamily = Mono,
+                        fontSize = 10.sp,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        letterSpacing = 0.5.sp
+                    )
+                },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = T.AccentPurple,
+                    selectedTextColor = T.AccentPurple,
+                    unselectedIconColor = T.TextMuted,
+                    unselectedTextColor = T.TextMuted,
+                    indicatorColor = T.AccentPurple.copy(alpha = 0.08f)
+                )
+            )
         }
     }
 }
 
+// ═══════════════════════════════════════════════════════
+//  CONFIRMATION DIALOG
+// ═══════════════════════════════════════════════════════
+@Composable
+fun ConfirmationDialog(plan: FlipPlanInfo, symbol: String, leverage: Int, onConfirm: () -> Unit, onCancel: () -> Unit) {
+    val isReal = plan.isReal
+    AlertDialog(
+        onDismissRequest = onCancel,
+        containerColor = T.Elevated,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(
+                    if (isReal) Icons.Default.Warning else Icons.Default.Science,
+                    contentDescription = null,
+                    modifier = Modifier.size(22.dp),
+                    tint = if (isReal) T.ShortRed else T.MartingaleAmber
+                )
+                Text(
+                    if (isReal) "GERÇEK EMİR" else "SİMÜLASYON",
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = Mono,
+                    fontSize = 14.sp,
+                    color = if (isReal) T.ShortRed else T.MartingaleAmber,
+                    letterSpacing = 0.5.sp
+                )
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(symbol, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = T.TextPrimary)
+                // Trade details
+                Surface(shape = RoundedCornerShape(8.dp), color = T.Surface) {
+                    Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
+                        Text("→ ${plan.currentVol} ${plan.currentSide}  ▸  ${plan.targetVol} ${plan.targetSide}", fontFamily = Mono, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = T.TextPrimary)
+                        Spacer(Modifier.height(4.dp))
+                        Text("Market / Isolated / ${leverage}x", fontSize = 11.sp, color = T.TextSecondary)
+                    }
+                }
+                // Mode badge
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        if (plan.mode == "MARTINGALE") Icons.Default.Warning else Icons.Default.Refresh,
+                        contentDescription = null, modifier = Modifier.size(14.dp),
+                        tint = if (plan.mode == "MARTINGALE") T.MartingaleAmber else T.LongGreen
+                    )
+                    Text(
+                        plan.mode,
+                        fontFamily = Mono, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                        color = if (plan.mode == "MARTINGALE") T.MartingaleAmber else T.LongGreen
+                    )
+                }
+                // Est PnL
+                val isNeg = plan.estimatedPnl.startsWith("-")
+                Text(
+                    "Est. PnL: ${plan.estimatedPnl} USDT",
+                    fontFamily = Mono, fontSize = 12.sp,
+                    color = if (isNeg) T.ShortRed else T.LongGreen
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(containerColor = if (isReal) T.ShortRed else T.AccentPurple),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Icon(if (isReal) Icons.Default.Bolt else Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(if (isReal) "GERÇEK FLIP" else "SİMÜLE ET", fontFamily = Mono, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text("İptal", color = T.TextMuted) }
+        }
+    )
+}
+
+// ═══════════════════════════════════════════════════════
+//  HISTORY TAB
+// ═══════════════════════════════════════════════════════
 @Composable
 fun HistoryTab(state: DashboardUiState, vm: DashboardViewModel) {
     Column(
@@ -613,49 +938,75 @@ fun HistoryTab(state: DashboardUiState, vm: DashboardViewModel) {
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("Flip Geçmişi", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(16.dp), tint = T.TextSecondary)
+                Text("FLIP GEÇMİŞİ", fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = T.TextPrimary, letterSpacing = 0.5.sp)
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = { vm.resetCycle() }) { Text("Sıfırla", fontSize = 11.sp) }
-                TextButton(onClick = { vm.clearLogs() }) { Text("Temizle", fontSize = 11.sp, color = ShortRed) }
+                TextButton(onClick = { vm.resetCycle() }) { Text("Sıfırla", fontFamily = Mono, fontSize = 11.sp, color = T.TextSecondary) }
+                TextButton(onClick = { vm.clearLogs() }) { Text("Temizle", fontFamily = Mono, fontSize = 11.sp, color = T.ShortRed) }
             }
         }
 
         if (state.flipLogs.isEmpty()) {
-            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = CardBg)) {
-                Text("Henüz flip yok", modifier = Modifier.padding(20.dp).fillMaxWidth(), textAlign = TextAlign.Center, color = TextMuted)
-            }
+            TerminalEmptyState(
+                icon = Icons.Default.ReceiptLong,
+                title = "Henüz flip yok",
+                subtitle = "FLIP & 2X butonuna basarak ilk işlemini yap"
+            )
         } else {
             state.flipLogs.forEach { log ->
-                val isSuccess = log.status == "SUCCESS"
                 val isLong = log.targetSide == "LONG"
-                val badgeColor = if (log.targetSide == "STOP") TextMuted else if (isLong) LongGreen else ShortRed
-                val badgeBg = if (log.targetSide == "STOP") Color(0x1F64748B) else if (isLong) Color(0x1F10B981) else Color(0x1FF43F5E)
+                val isStop = log.targetSide == "STOP"
+                val isSuccess = log.status == "SUCCESS"
+                val sideColor = when {
+                    isStop -> T.TextMuted
+                    isLong -> T.LongGreen
+                    else -> T.ShortRed
+                }
+                val sideBg = when {
+                    isStop -> T.SurfaceVariant
+                    isLong -> T.LongGreenDim
+                    else -> T.ShortRedDim
+                }
 
-                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(containerColor = CardBg)) {
-                    Column(modifier = Modifier.padding(8.dp)) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            val timeStr = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(log.createdAt))
-                            Text("#${log.cycleNumber} | $timeStr", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = TextMuted)
-                            Text(
-                                log.flipMode,
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (log.flipMode == "MARTINGALE") ShortRed else ResetIndigo
+                TerminalCard(modifier = Modifier.fillMaxWidth(), containerColor = T.Surface) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        val timeStr = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(log.createdAt))
+                        Text("#${log.cycleNumber} · $timeStr", fontFamily = Mono, fontSize = 10.sp, color = T.TextMuted)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Icon(
+                                if (log.flipMode == "MARTINGALE") Icons.Default.Warning else Icons.Default.Refresh,
+                                contentDescription = null, modifier = Modifier.size(10.dp),
+                                tint = if (log.flipMode == "MARTINGALE") T.MartingaleAmber else T.AccentCyan
                             )
+                            Text(log.flipMode, fontFamily = Mono, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (log.flipMode == "MARTINGALE") T.MartingaleAmber else T.AccentCyan)
                         }
-                        Spacer(Modifier.height(4.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Surface(shape = RoundedCornerShape(4.dp), color = badgeBg) {
-                                Text(log.targetSide, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = badgeColor)
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Surface(shape = RoundedCornerShape(4.dp), color = sideBg) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Icon(
+                                    if (isLong) Icons.Default.TrendingUp else if (isStop) Icons.Default.RemoveCircleOutline else Icons.Default.TrendingDown,
+                                    contentDescription = null, modifier = Modifier.size(10.dp), tint = sideColor
+                                )
+                                Text(log.targetSide, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = Mono, color = sideColor)
                             }
-                            Text("${log.targetVolume}c", fontFamily = FontFamily.Monospace, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                            Text("$${log.estimatedPnl}", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = if (log.estimatedPnl.startsWith("-")) ShortRed else LongGreen)
-                            Text("Σ${log.cyclePnlAfter}", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = if (log.cyclePnlAfter?.startsWith("-") == true) ShortRed else LongGreen)
                         }
-                        if (log.errorMessage != null) {
-                            Spacer(Modifier.height(2.dp))
-                            Text(log.errorMessage!!, fontSize = 9.sp, color = ShortRed)
+                        Text("${log.targetVolume}c", fontFamily = Mono, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = T.TextPrimary)
+                        Text("$${log.estimatedPnl}", fontFamily = Mono, fontSize = 10.sp, color = if (log.estimatedPnl.startsWith("-")) T.ShortRed else T.LongGreen)
+                        Text("Σ${log.cyclePnlAfter}", fontFamily = Mono, fontSize = 10.sp, color = if (log.cyclePnlAfter?.startsWith("-") == true) T.ShortRed else T.LongGreen)
+                    }
+                    if (log.errorMessage != null) {
+                        Spacer(Modifier.height(4.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Icon(Icons.Default.ErrorOutline, contentDescription = null, modifier = Modifier.size(10.dp), tint = T.ShortRed)
+                            Text(log.errorMessage!!, fontSize = 9.sp, color = T.ShortRed, fontFamily = Mono)
                         }
                     }
                 }
@@ -664,13 +1015,32 @@ fun HistoryTab(state: DashboardUiState, vm: DashboardViewModel) {
     }
 }
 
+// ═══════════════════════════════════════════════════════
+//  ORDERS TAB
+// ═══════════════════════════════════════════════════════
 @Composable
 fun OrdersTab() {
-    Card(modifier = Modifier.fillMaxWidth().padding(10.dp), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = CardBg)) {
-        Text("Açık emir yok", modifier = Modifier.padding(20.dp).fillMaxWidth(), textAlign = TextAlign.Center, color = TextMuted)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(Icons.Default.FactCheck, contentDescription = null, modifier = Modifier.size(16.dp), tint = T.TextSecondary)
+            Text("AÇIK EMİRLER", fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = T.TextPrimary, letterSpacing = 0.5.sp)
+        }
+        TerminalEmptyState(
+            icon = Icons.Default.Inbox,
+            title = "Açık emir yok",
+            subtitle = "Bir flip işlemi başlattığında emirler burada görünecek"
+        )
     }
 }
 
+// ═══════════════════════════════════════════════════════
+//  SETTINGS TAB
+// ═══════════════════════════════════════════════════════
 @Composable
 fun SettingsTab(state: DashboardUiState, vm: DashboardViewModel) {
     var apiKey by remember { mutableStateOf("") }
@@ -684,81 +1054,159 @@ fun SettingsTab(state: DashboardUiState, vm: DashboardViewModel) {
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // API Credentials
-        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = CardBg)) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text("MEXC API (Futures)", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                Spacer(Modifier.height(4.dp))
-                Text("⚠️ Withdrawal izni KESİNLİKLE kapalı olmalı!", fontSize = 10.sp, color = ShortRed, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(value = apiKey, onValueChange = { apiKey = it }, modifier = Modifier.fillMaxWidth(), label = { Text("API Key") }, singleLine = true, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = BorderColor, unfocusedBorderColor = BorderColor, focusedContainerColor = CardAlt, unfocusedContainerColor = CardAlt), shape = RoundedCornerShape(10.dp))
-                Spacer(Modifier.height(6.dp))
-                OutlinedTextField(value = apiSecret, onValueChange = { apiSecret = it }, modifier = Modifier.fillMaxWidth(), label = { Text("API Secret") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = BorderColor, unfocusedBorderColor = BorderColor, focusedContainerColor = CardAlt, unfocusedContainerColor = CardAlt), shape = RoundedCornerShape(10.dp))
-                Spacer(Modifier.height(8.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = {
-                            if (vm.saveCredentials(apiKey, apiSecret)) {
-                                vm.setTradingMode(TradingMode.REAL)
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentPurple)
-                    ) { Text("Kaydet & Bağlan") }
-                    Button(
-                        onClick = { vm.testApiConnection() },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = ResetIndigo)
-                    ) { Text("Test Et") }
+        TerminalCard(modifier = Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Default.Key, contentDescription = null, modifier = Modifier.size(16.dp), tint = T.AccentPurple)
+                Text("MEXC API", fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = T.TextPrimary, letterSpacing = 0.5.sp)
+            }
+            Spacer(Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Icon(Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(12.dp), tint = T.ShortRed)
+                Text("Withdrawal izni KESİNLİKLE kapalı olmalı!", fontSize = 10.sp, color = T.ShortRed, fontFamily = Mono, fontWeight = FontWeight.SemiBold)
+            }
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(value = apiKey, onValueChange = { apiKey = it }, modifier = Modifier.fillMaxWidth(), label = { Text("API Key", color = T.TextMuted) }, singleLine = true, leadingIcon = { Icon(Icons.Default.VpnKey, contentDescription = null, modifier = Modifier.size(16.dp), tint = T.TextMuted) }, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = T.BorderStrong, unfocusedBorderColor = T.Border, focusedContainerColor = T.Surface, unfocusedContainerColor = T.Surface, focusedTextColor = T.TextPrimary, unfocusedTextColor = T.TextPrimary, focusedLabelColor = T.TextSecondary, unfocusedLabelColor = T.TextMuted, cursorColor = T.AccentCyan), shape = RoundedCornerShape(8.dp))
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(value = apiSecret, onValueChange = { apiSecret = it }, modifier = Modifier.fillMaxWidth(), label = { Text("API Secret", color = T.TextMuted) }, singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp), tint = T.TextMuted) }, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = T.BorderStrong, unfocusedBorderColor = T.Border, focusedContainerColor = T.Surface, unfocusedContainerColor = T.Surface, focusedTextColor = T.TextPrimary, unfocusedTextColor = T.TextPrimary, focusedLabelColor = T.TextSecondary, unfocusedLabelColor = T.TextMuted, cursorColor = T.AccentCyan), shape = RoundedCornerShape(8.dp))
+            Spacer(Modifier.height(10.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { if (vm.saveCredentials(apiKey, apiSecret)) vm.setTradingMode(TradingMode.REAL) }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.buttonColors(containerColor = T.AccentPurple)) {
+                    Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Kaydet & Bağlan", fontFamily = Mono, fontSize = 12.sp)
                 }
-                Spacer(Modifier.height(6.dp))
-                TextButton(
-                    onClick = { vm.deleteCredentials(); apiKey = ""; apiSecret = "" },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("API bilgilerini tamamen sil", color = ShortRed) }
+                Button(onClick = { vm.testApiConnection() }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.buttonColors(containerColor = T.Elevated)) {
+                    Icon(Icons.Default.NetworkCheck, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Test", fontFamily = Mono, fontSize = 12.sp)
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            TextButton(onClick = { vm.deleteCredentials(); apiKey = ""; apiSecret = "" }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(14.dp), tint = T.ShortRed)
+                Spacer(Modifier.width(4.dp))
+                Text("API bilgilerini tamamen sil", fontFamily = Mono, fontSize = 11.sp, color = T.ShortRed)
             }
         }
 
         // Reset Action
-        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = CardBg)) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text("Kâr Sonrası Davranış", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                Spacer(Modifier.height(8.dp))
-                var expanded by remember { mutableStateOf(false) }
-                Box {
-                    OutlinedTextField(
-                        value = when (state.resetAction) {
-                            ResetAction.LONG -> "Yeni LONG pozisyon aç"
-                            ResetAction.SHORT -> "Yeni SHORT pozisyon aç"
-                            ResetAction.STOP -> "Pozisyonu kapat ve DURDUR"
-                        },
-                        onValueChange = {},
-                        readOnly = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = BorderColor, unfocusedBorderColor = BorderColor, focusedContainerColor = CardAlt, unfocusedContainerColor = CardAlt),
-                        shape = RoundedCornerShape(10.dp),
-                        trailingIcon = { Text("▼", fontSize = 10.sp, color = TextMuted, modifier = Modifier.padding(end = 8.dp)) }
-                    )
-                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                        DropdownMenuItem(text = { Text("Yeni LONG pozisyon aç") }, onClick = { vm.setResetAction(ResetAction.LONG); expanded = false })
-                        DropdownMenuItem(text = { Text("Yeni SHORT pozisyon aç") }, onClick = { vm.setResetAction(ResetAction.SHORT); expanded = false })
-                        DropdownMenuItem(text = { Text("Pozisyonu kapat ve DURDUR") }, onClick = { vm.setResetAction(ResetAction.STOP); expanded = false })
+        TerminalCard(modifier = Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Default.ToggleOn, contentDescription = null, modifier = Modifier.size(16.dp), tint = T.AccentCyan)
+                Text("KÂR SONRASI DAVRANIŞ", fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = T.TextPrimary, letterSpacing = 0.5.sp)
+            }
+            Spacer(Modifier.height(8.dp))
+            var expanded by remember { mutableStateOf(false) }
+            Box {
+                Surface(
+                    modifier = Modifier.fillMaxWidth().clickable { expanded = true },
+                    shape = RoundedCornerShape(8.dp),
+                    color = T.Surface
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().border(1.dp, T.Border, RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            val icon = when (state.resetAction) {
+                                ResetAction.LONG -> Icons.Default.TrendingUp
+                                ResetAction.SHORT -> Icons.Default.TrendingDown
+                                ResetAction.STOP -> Icons.Default.StopCircle
+                            }
+                            val iconColor = when (state.resetAction) {
+                                ResetAction.LONG -> T.LongGreen
+                                ResetAction.SHORT -> T.ShortRed
+                                ResetAction.STOP -> T.TextMuted
+                            }
+                            Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp), tint = iconColor)
+                            val label = when (state.resetAction) {
+                                ResetAction.LONG -> "Yeni LONG pozisyon aç"
+                                ResetAction.SHORT -> "Yeni SHORT pozisyon aç"
+                                ResetAction.STOP -> "Kapat ve DURDUR"
+                            }
+                            Text(label, fontSize = 12.sp, color = T.TextPrimary, fontFamily = Mono, fontWeight = FontWeight.SemiBold)
+                        }
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(18.dp), tint = T.TextMuted)
                     }
+                }
+                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, containerColor = T.Elevated) {
+                    DropdownMenuItem(
+                        text = { Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.TrendingUp, contentDescription = null, modifier = Modifier.size(16.dp), tint = T.LongGreen); Text("Yeni LONG pozisyon aç", fontFamily = Mono, fontSize = 12.sp, color = T.TextPrimary) } },
+                        onClick = { vm.setResetAction(ResetAction.LONG); expanded = false },
+                        leadingIcon = { if (state.resetAction == ResetAction.LONG) Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp), tint = T.LongGreen) }
+                    )
+                    DropdownMenuItem(
+                        text = { Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.TrendingDown, contentDescription = null, modifier = Modifier.size(16.dp), tint = T.ShortRed); Text("Yeni SHORT pozisyon aç", fontFamily = Mono, fontSize = 12.sp, color = T.TextPrimary) } },
+                        onClick = { vm.setResetAction(ResetAction.SHORT); expanded = false },
+                        leadingIcon = { if (state.resetAction == ResetAction.SHORT) Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp), tint = T.LongGreen) }
+                    )
+                    DropdownMenuItem(
+                        text = { Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.StopCircle, contentDescription = null, modifier = Modifier.size(16.dp), tint = T.TextMuted); Text("Kapat ve DURDUR", fontFamily = Mono, fontSize = 12.sp, color = T.TextPrimary) } },
+                        onClick = { vm.setResetAction(ResetAction.STOP); expanded = false },
+                        leadingIcon = { if (state.resetAction == ResetAction.STOP) Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp), tint = T.LongGreen) }
+                    )
                 }
             }
         }
 
-        // Screenshot
-        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = CardBg)) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text("Güvenlik", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                Spacer(Modifier.height(4.dp))
-                Text("Uygulama sürümü: 1.0.0", fontSize = 11.sp, color = TextMuted)
+        // Security card
+        TerminalCard(modifier = Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Default.Shield, contentDescription = null, modifier = Modifier.size(16.dp), tint = T.LongGreen)
+                Text("GÜVENLİK", fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = T.TextPrimary, letterSpacing = 0.5.sp)
             }
+            Spacer(Modifier.height(6.dp))
+            Text("Uygulama sürümü: 1.0.0", fontSize = 11.sp, color = T.TextSecondary, fontFamily = Mono)
+            Text("Şifreli credential storage: AES-256-GCM", fontSize = 10.sp, color = T.TextMuted, fontFamily = Mono)
         }
     }
 }
+
+// ═══════════════════════════════════════════════════════
+//  REUSABLE COMPONENTS
+// ═══════════════════════════════════════════════════════
+
+@Composable
+fun TerminalCard(
+    modifier: Modifier = Modifier,
+    containerColor: Color = T.Surface,
+    borderColor: Color = T.Border,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(CardRadius),
+        color = containerColor,
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, borderColor),
+        tonalElevation = 1.dp
+    ) {
+        Column(modifier = Modifier.padding(CardInnerPad), content = content)
+    }
+}
+
+@Composable
+fun TerminalEmptyState(
+    icon: ImageVector,
+    title: String,
+    subtitle: String
+) {
+    TerminalCard(modifier = Modifier.fillMaxWidth(), containerColor = T.Surface) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(36.dp), tint = T.TextMuted)
+            Text(title, fontSize = 13.sp, color = T.TextSecondary, fontWeight = FontWeight.SemiBold)
+            Text(subtitle, fontSize = 11.sp, color = T.TextMuted, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════
+//  UTILITIES
+// ═══════════════════════════════════════════════════════
 
 private fun formatPrice(price: BigDecimal): String {
     val abs = price.abs()
