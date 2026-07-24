@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -20,7 +21,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -673,14 +673,17 @@ fun ModeHintCard(state: DashboardUiState) {
     val cycle = state.cycleState
     val isProfitable = cycle.runningPnl > BigDecimal.ZERO
     
-    val (bgColor, borderColor, textColor, message, preview) = when {
+    val bgColor: Color
+    val borderColorVal: Color
+    val textColor: Color
+    val message: String
+    
+    when {
         isProfitable && state.resetAction == ResetAction.STOP -> {
-            val bg = Color(0x1FF43F5E)
-            val border = Color(0x40F43F5E)
-            val color = ShortRed
-            val msg = "Equity kârda → KAPAT & DURDUR"
-            val prev = "KAPAT & DURDUR | yeni pozisyon açılmaz"
-            Triple(Triple(bg, border, color), msg, prev)
+            bgColor = Color(0x1FF43F5E)
+            borderColorVal = Color(0x40F43F5E)
+            textColor = ShortRed
+            message = "Equity kârda → KAPAT & DURDUR"
         }
         isProfitable -> {
             val rs = when (state.resetAction) {
@@ -688,30 +691,27 @@ fun ModeHintCard(state: DashboardUiState) {
                 ResetAction.SHORT -> "SHORT"
                 ResetAction.STOP -> "STOP"
             }
-            val bg = Color(0x24818CF8)
-            val border = Color(0x4D818CF8)
-            val color = Color(0xFF6366F1)
-            val msg = "Equity kârda → SIFIRLA ${state.resetSize} $rs"
-            val prev = "${state.resetSize} $rs | döngü biter"
-            Triple(Triple(bg, border, color), msg, prev)
+            bgColor = Color(0x24818CF8)
+            borderColorVal = Color(0x4D818CF8)
+            textColor = Color(0xFF6366F1)
+            message = "Equity kârda → SIFIRLA ${state.resetSize} $rs"
         }
         else -> {
             val newSide = pos?.side?.opposite?.name ?: "SHORT"
             val newSize = pos?.holdVol?.times(BigDecimal("2")) ?: BigDecimal.ZERO
-            val bg = if (cycle.runningPnl < BigDecimal.ZERO) Color(0x1FF43F5E) else Color(0x1F64748B)
-            val border = if (cycle.runningPnl < BigDecimal.ZERO) Color(0x40F43F5E) else Color(0x3864748B)
-            val color = if (cycle.runningPnl < BigDecimal.ZERO) ShortRed else Color(0xFF475569)
-            val msg = "Zararda → MARTINGALE → $newSize $newSide"
-            val prev = "$newSize $newSide (seri devam)"
-            Triple(Triple(bg, border, color), msg, prev)
+            bgColor = if (cycle.runningPnl < BigDecimal.ZERO) Color(0x1FF43F5E) else Color(0x1F64748B)
+            borderColorVal = if (cycle.runningPnl < BigDecimal.ZERO) Color(0x40F43F5E) else Color(0x3864748B)
+            textColor = if (cycle.runningPnl < BigDecimal.ZERO) ShortRed else Color(0xFF475569)
+            message = "Zararda → MARTINGALE → $newSize $newSide"
         }
     }
     
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, borderColorVal, RoundedCornerShape(8.dp)),
         shape = RoundedCornerShape(8.dp),
-        color = bgColor.first,
-        border = androidx.compose.foundation.border(1.dp, borderColor, RoundedCornerShape(8.dp))
+        color = bgColor
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -752,9 +752,9 @@ fun SettingsRow(state: DashboardUiState, vm: DashboardViewModel) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { expanded = true }
-                        .clip(RoundedCornerShape(10.dp)),
-                    color = CardAlt,
-                    border = androidx.compose.foundation.border(1.dp, BorderColor, RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(10.dp))
+                        .border(1.dp, BorderColor, RoundedCornerShape(10.dp)),
+                    color = CardAlt
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
@@ -785,9 +785,9 @@ fun SettingsRow(state: DashboardUiState, vm: DashboardViewModel) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { expanded = true }
-                        .clip(RoundedCornerShape(10.dp)),
-                    color = CardAlt,
-                    border = androidx.compose.foundation.border(1.dp, BorderColor, RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(10.dp))
+                        .border(1.dp, BorderColor, RoundedCornerShape(10.dp)),
+                    color = CardAlt
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
@@ -921,10 +921,10 @@ fun FlipBar(state: DashboardUiState, vm: DashboardViewModel) {
 @Composable
 fun NavigationBar(selectedTab: Int, onTabSelected: (Int) -> Unit) {
     val tabs = listOf(
-        Triple("panel", "Panel", androidx.compose.material.icons.filled.BarChart),
-        Triple("log", "Log", androidx.compose.material.icons.filled.History),
-        Triple("orders", "Emirler", androidx.compose.material.icons.filled.Receipt),
-        Triple("settings", "Ayarlar", androidx.compose.material.icons.filled.Settings)
+        "Panel" to "panel",
+        "Log" to "log",
+        "Emirler" to "orders",
+        "Ayarlar" to "settings"
     )
     
     Surface(
@@ -936,7 +936,7 @@ fun NavigationBar(selectedTab: Int, onTabSelected: (Int) -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            tabs.forEachIndexed { idx, (key, label, icon) ->
+            tabs.forEachIndexed { idx, (label, _) ->
                 val isSelected = idx == selectedTab
                 Column(
                     modifier = Modifier
@@ -944,18 +944,22 @@ fun NavigationBar(selectedTab: Int, onTabSelected: (Int) -> Unit) {
                         .padding(vertical = 6.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(
-                        icon,
-                        contentDescription = label,
-                        modifier = Modifier.size(18.dp),
-                        tint = if (isSelected) AccentPurple else TextMuted
-                    )
                     Text(
                         label,
-                        fontSize = 9.sp,
+                        fontSize = 12.sp,
                         color = if (isSelected) AccentPurple else TextMuted,
                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                     )
+                    if (isSelected) {
+                        Box(
+                            modifier = Modifier
+                                .width(20.dp)
+                                .height(2.dp)
+                                .background(AccentPurple, RoundedCornerShape(1.dp))
+                        )
+                    } else {
+                        Spacer(Modifier.height(2.dp))
+                    }
                 }
             }
         }

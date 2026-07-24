@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -105,46 +107,52 @@ class DashboardViewModel(
         
         viewModelScope.launch {
             runCatching {
-                val assets = privateApi.accountAssets()
-                val positions = privateApi.openPositions()
+                val assetsJson: JSONArray = privateApi.accountAssets()
+                val positionsJson: JSONArray = privateApi.openPositions()
                 
                 val symbol = _state.value.symbol
                 val settleCurrency = symbol.substringAfter("_", "USDT")
                 
-                val asset = assets.firstOrNull { 
-                    it.optString("currency", "").equals(settleCurrency, ignoreCase = true) 
+                // Find settlement asset
+                var accountAsset: AccountAsset? = null
+                for (i in 0 until assetsJson.length()) {
+                    val asset = assetsJson.getJSONObject(i)
+                    if (asset.optString("currency", "").equals(settleCurrency, ignoreCase = true)) {
+                        accountAsset = AccountAsset(
+                            currency = asset.optString("currency", ""),
+                            equity = asset.optBigDecimal("equity", BigDecimal.ZERO),
+                            availableBalance = asset.optBigDecimal("availableBalance", BigDecimal.ZERO),
+                            availableOpen = asset.optBigDecimal("availableOpen", asset.optBigDecimal("availableBalance", BigDecimal.ZERO)),
+                            cashBalance = asset.optBigDecimal("cashBalance", BigDecimal.ZERO),
+                            positionMargin = asset.optBigDecimal("positionMargin", BigDecimal.ZERO),
+                            frozenBalance = asset.optBigDecimal("frozenBalance", BigDecimal.ZERO),
+                            unrealized = asset.optBigDecimal("unrealized", BigDecimal.ZERO),
+                            bonus = asset.optBigDecimal("bonus", BigDecimal.ZERO)
+                        )
+                        break
+                    }
                 }
                 
-                val accountAsset = if (asset != null) {
-                    AccountAsset(
-                        currency = asset.optString("currency", ""),
-                        equity = asset.optBigDecimal("equity", BigDecimal.ZERO),
-                        availableBalance = asset.optBigDecimal("availableBalance", BigDecimal.ZERO),
-                        availableOpen = asset.optBigDecimal("availableOpen", asset.optBigDecimal("availableBalance", BigDecimal.ZERO)),
-                        cashBalance = asset.optBigDecimal("cashBalance", BigDecimal.ZERO),
-                        positionMargin = asset.optBigDecimal("positionMargin", BigDecimal.ZERO),
-                        frozenBalance = asset.optBigDecimal("frozenBalance", BigDecimal.ZERO),
-                        unrealized = asset.optBigDecimal("unrealized", BigDecimal.ZERO),
-                        bonus = asset.optBigDecimal("bonus", BigDecimal.ZERO)
-                    )
-                } else null
-                
-                val position = positions.firstOrNull {
-                    it.optString("symbol") == symbol && 
-                    it.optBigDecimal("holdVol", BigDecimal.ZERO) > BigDecimal.ZERO
-                }?.let { pos ->
-                    val positionType = pos.optInt("positionType", 0)
-                    OpenPosition(
-                        positionId = pos.optLong("positionId", 0),
-                        symbol = pos.optString("symbol", ""),
-                        holdVol = pos.optBigDecimal("holdVol", BigDecimal.ZERO),
-                        side = if (positionType == 1) PositionSide.LONG else PositionSide.SHORT,
-                        entryPrice = pos.optBigDecimal("openAvgPrice", BigDecimal.ZERO),
-                        liquidationPrice = pos.optBigDecimal("liquidatePrice", BigDecimal.ZERO),
-                        margin = pos.optBigDecimal("im", BigDecimal.ZERO),
-                        leverage = pos.optInt("leverage", 10),
-                        unrealizedPnl = pos.optBigDecimal("unRealizedPnl", BigDecimal.ZERO)
-                    )
+                // Find position for symbol
+                var position: OpenPosition? = null
+                for (i in 0 until positionsJson.length()) {
+                    val pos = positionsJson.getJSONObject(i)
+                    if (pos.optString("symbol") == symbol && 
+                        pos.optBigDecimal("holdVol", BigDecimal.ZERO) > BigDecimal.ZERO) {
+                        val positionType = pos.optInt("positionType", 0)
+                        position = OpenPosition(
+                            positionId = pos.optLong("positionId", 0),
+                            symbol = pos.optString("symbol", ""),
+                            holdVol = pos.optBigDecimal("holdVol", BigDecimal.ZERO),
+                            side = if (positionType == 1) PositionSide.LONG else PositionSide.SHORT,
+                            entryPrice = pos.optBigDecimal("openAvgPrice", BigDecimal.ZERO),
+                            liquidationPrice = pos.optBigDecimal("liquidatePrice", BigDecimal.ZERO),
+                            margin = pos.optBigDecimal("im", BigDecimal.ZERO),
+                            leverage = pos.optInt("leverage", 10),
+                            unrealizedPnl = pos.optBigDecimal("unRealizedPnl", BigDecimal.ZERO)
+                        )
+                        break
+                    }
                 }
                 
                 _state.value = _state.value.copy(
@@ -181,24 +189,30 @@ class DashboardViewModel(
                 // Martingale kararı
                 val isProfitable = cycleState.runningPnl > BigDecimal.ZERO
                 
-                val (targetSide, targetVolume, mode) = if (isProfitable) {
-                    // RESET
-                    when (currentState.resetAction) {
-                        ResetAction.STOP -> Triple(position.side, BigDecimal.ZERO, "STOP")
-                        ResetAction.LONG -> Triple(PositionSide.LONG, currentState.resetSize, "RESET")
-                        ResetAction.SHORT -> Triple(PositionSide.SHORT, currentState.resetSize, "RESET")
+                val (targetSide, targetVolume, mode) = when {
+                    isProfitable && currentState.resetAction == ResetAction.STOP -> {
+                        Triple(position.side, BigDecimal.ZERO, "STOP")
                     }
-                } else {
-                    // MARTINGALE
-                    val newVol = position.holdVol * BigDecimal("2")
-                    if (newVol > currentState.maxContracts) {
-                        _state.value = _state.value.copy(
-                            isFlipping = false,
-                            error = "Max kontrat (${currentState.maxContracts}) aşımı"
-                        )
-                        return@launch
+                    isProfitable -> {
+                        val side = when (currentState.resetAction) {
+                            ResetAction.LONG -> PositionSide.LONG
+                            ResetAction.SHORT -> PositionSide.SHORT
+                            ResetAction.STOP -> PositionSide.LONG // won't reach here
+                        }
+                        Triple(side, currentState.resetSize, "RESET")
                     }
-                    Triple(position.side.opposite, newVol, "MARTINGALE")
+                    else -> {
+                        // MARTINGALE
+                        val newVol = position.holdVol * BigDecimal("2")
+                        if (newVol > currentState.maxContracts) {
+                            _state.value = _state.value.copy(
+                                isFlipping = false,
+                                error = "Max kontrat (${currentState.maxContracts}) aşımı"
+                            )
+                            return@launch
+                        }
+                        Triple(position.side.opposite, newVol, "MARTINGALE")
+                    }
                 }
                 
                 if (currentState.tradingMode == TradingMode.SIM) {
@@ -253,7 +267,7 @@ class DashboardViewModel(
     }
 }
 
-private fun org.json.JSONObject.optBigDecimal(key: String, defaultValue: BigDecimal): BigDecimal {
+private fun JSONObject.optBigDecimal(key: String, defaultValue: BigDecimal): BigDecimal {
     val value = opt(key) ?: return defaultValue
     return when (value) {
         is Number -> BigDecimal(value.toString())
