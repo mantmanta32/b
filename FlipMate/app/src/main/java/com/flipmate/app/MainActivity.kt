@@ -41,7 +41,12 @@ private fun Dashboard(vm: DashboardViewModel) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("FlipMate", style = MaterialTheme.typography.headlineMedium)
-        OutlinedTextField(symbol, { symbol = it.uppercase() }, { Text("Sembol") }, Modifier.fillMaxWidth())
+        OutlinedTextField(
+            value = symbol,
+            onValueChange = { symbol = it.uppercase() },
+            label = { Text("Sembol") },
+            modifier = Modifier.fillMaxWidth()
+        )
         Button({ vm.setSymbol(symbol); vm.refresh() }, Modifier.fillMaxWidth()) {
             Text("Yenile")
         }
