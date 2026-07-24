@@ -21,6 +21,6 @@ class ExecuteFlipUseCase(private val positions: PositionRepository) {
                 check(positions.getOpenPositions().none { it.positionId == plan.positionId }) { "CLOSE_NOT_CONFIRMED" }
                 positions.createOrder(plan.symbol, if (plan.targetSide == PositionSide.LONG) 1 else 3, plan.targetVolume.toPlainString(), price.toPlainString())
             }
-        }
+        }.map { }
     }
 }
