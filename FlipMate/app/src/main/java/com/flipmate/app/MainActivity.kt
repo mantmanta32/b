@@ -120,7 +120,15 @@ fun FlipMateApp(vm: DashboardViewModel) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(T.Base)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color(0xFFFDF2F8),
+                            Color(0xFFF5EBFF),
+                            Color(0xFFF3F0FF)
+                        )
+                    )
+                )
         ) {
             // REAL mode: top accent border
             if (isReal) {
@@ -269,13 +277,13 @@ fun PriceCard(state: DashboardUiState, symbol: String, onSymbolChange: (String) 
                 singleLine = true,
                 textStyle = LocalTextStyle.current.copy(fontFamily = Mono, fontSize = 12.sp, fontWeight = FontWeight.Bold),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = T.BorderStrong,
+                    focusedBorderColor = T.AccentPurple,
                     unfocusedBorderColor = T.Border,
-                    focusedContainerColor = T.Elevated,
+                    focusedContainerColor = T.Surface,
                     unfocusedContainerColor = T.Elevated,
                     focusedTextColor = T.TextPrimary,
                     unfocusedTextColor = T.TextPrimary,
-                    cursorColor = T.AccentCyan
+                    cursorColor = T.AccentPurple
                 ),
                 shape = RoundedCornerShape(8.dp)
             )
@@ -756,7 +764,7 @@ fun FlipBar(state: DashboardUiState, vm: DashboardViewModel) {
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = T.Surface,
+        color = Color(0xFFFAF3FF),
         tonalElevation = 2.dp
     ) {
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
@@ -800,7 +808,7 @@ fun FlipBar(state: DashboardUiState, vm: DashboardViewModel) {
 @Composable
 fun TerminalBottomNav(selectedTab: Int, onTabSelected: (Int) -> Unit) {
     NavigationBar(
-        containerColor = T.Surface,
+        containerColor = Color(0xFFFAF4FF),
         contentColor = T.TextPrimary,
         tonalElevation = 2.dp
     ) {
@@ -1176,7 +1184,7 @@ fun TerminalCard(
         modifier = modifier.border(0.5.dp, borderColor, RoundedCornerShape(CardRadius)),
         shape = RoundedCornerShape(CardRadius),
         color = containerColor,
-        tonalElevation = 1.dp
+        tonalElevation = 2.dp
     ) {
         Column(modifier = Modifier.padding(CardInnerPad)) {
             content()
