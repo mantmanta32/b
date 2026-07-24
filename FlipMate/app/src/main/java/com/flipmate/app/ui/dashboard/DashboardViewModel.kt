@@ -76,6 +76,21 @@ class DashboardViewModel(
         observeLogs()
         startAutoRefresh()
         observeWsPrice()
+        
+        // SIM modda başlangıç pozisyonu oluştur
+        _state.value = _state.value.copy(
+            position = OpenPosition(
+                positionId = 0,
+                symbol = "BTC_USDT",
+                holdVol = BigDecimal("2"),
+                side = PositionSide.LONG,
+                entryPrice = BigDecimal.ZERO,
+                liquidationPrice = BigDecimal.ZERO,
+                margin = BigDecimal.ZERO,
+                leverage = 10,
+                unrealizedPnl = BigDecimal.ZERO
+            )
+        )
     }
 
     private fun observeWsPrice() {
@@ -90,9 +105,10 @@ class DashboardViewModel(
                                 ticker = current.copy(lastPrice = bd)
                             )
                         } else {
-                            // İlk WebSocket verisi geldiğinde REST'ten tam ticker al
                             refresh()
                         }
+                        // SIM modda entry price ve unrealizedPnl hesapla
+                        updateSimPositionPnl(bd)
                     }
                 }
             }
@@ -104,6 +120,45 @@ class DashboardViewModel(
                 }
             }
         }
+    }
+
+    private fun updateSimPositionPnl(currentPrice: BigDecimal) {
+        val state = _state.value
+        if (state.tradingMode != TradingMode.SIM) return
+        val pos = state.position ?: return
+        
+        // Entry price 0 ise (yeni pozisyon) currentPrice'ı set et
+        val entryPrice = if (pos.entryPrice == BigDecimal.ZERO) currentPrice else pos.entryPrice
+        
+        // Unrealized PnL hesapla
+        val pnl = if (pos.side == PositionSide.LONG) {
+            (currentPrice - entryPrice) * pos.holdVol
+        } else {
+            (entryPrice - currentPrice) * pos.holdVol
+        }
+        
+        // Margin hesapla
+        val margin = if (pos.margin == BigDecimal.ZERO && entryPrice > BigDecimal.ZERO) {
+            entryPrice * pos.holdVol / BigDecimal(pos.leverage)
+        } else pos.margin
+        
+        // Liq price hesapla (basit)
+        val liqPrice = if (pos.liquidationPrice == BigDecimal.ZERO && entryPrice > BigDecimal.ZERO) {
+            if (pos.side == PositionSide.LONG) {
+                entryPrice * (BigDecimal.ONE - BigDecimal.ONE / BigDecimal(pos.leverage))
+            } else {
+                entryPrice * (BigDecimal.ONE + BigDecimal.ONE / BigDecimal(pos.leverage))
+            }
+        } else pos.liquidationPrice
+        
+        _state.value = _state.value.copy(
+            position = pos.copy(
+                entryPrice = entryPrice,
+                unrealizedPnl = pnl,
+                margin = margin,
+                liquidationPrice = liqPrice
+            )
+        )
     }
 
     private fun startAutoRefresh() {
@@ -183,6 +238,8 @@ class DashboardViewModel(
             }.onSuccess {
                 tickerRepository.connectWebSocket(symbol)
                 _state.value = _state.value.copy(ticker = it, loading = false)
+                // SIM modda PnL güncelle
+                updateSimPositionPnl(it.lastPrice)
             }.onFailure {
                 _state.value = _state.value.copy(loading = false, error = "Ticker alınamadı")
             }
