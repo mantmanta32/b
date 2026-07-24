@@ -8,10 +8,15 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
       - uses: gradle/actions/setup-gradle@v4
-      - run: gradle wrapper --gradle-version 8.10.2
-      - run: chmod +x gradlew
-      - run: ./gradlew testDebugUnitTest
-      - run: ./gradlew lintDebug
-      - run: ./gradlew assembleDebug
+      - working-directory: FlipMate
+        run: gradle wrapper --gradle-version 8.10.2
+      - working-directory: FlipMate
+        run: chmod +x gradlew
+      - working-directory: FlipMate
+        run: ./gradlew testDebugUnitTest
+      - working-directory: FlipMate
+        run: ./gradlew lintDebug
+      - working-directory: FlipMate
+        run: ./gradlew assembleDebug
       - uses: actions/upload-artifact@v4
         with: { name: flipmate-debug-apk, path: FlipMate/app/build/outputs/apk/debug/app-debug.apk }
