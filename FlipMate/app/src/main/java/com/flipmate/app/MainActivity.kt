@@ -714,7 +714,7 @@ fun SettingsRow(state: DashboardUiState, vm: DashboardViewModel) {
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 textStyle = LocalTextStyle.current.copy(fontFamily = Mono, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = T.TextPrimary),
-                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = T.BorderStrong, unfocusedBorderColor = T.Border, focusedContainerColor = T.Elevated, unfocusedContainerColor = T.Elevated, cursorColor = T.AccentCyan),
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = T.AccentPurple, unfocusedBorderColor = T.Border, focusedContainerColor = T.Surface, unfocusedContainerColor = T.Elevated, cursorColor = T.AccentPurple),
                 shape = RoundedCornerShape(8.dp)
             )
         }
@@ -729,7 +729,7 @@ fun SettingsRow(state: DashboardUiState, vm: DashboardViewModel) {
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 textStyle = LocalTextStyle.current.copy(fontFamily = Mono, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = T.TextPrimary),
-                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = T.BorderStrong, unfocusedBorderColor = T.Border, focusedContainerColor = T.Elevated, unfocusedContainerColor = T.Elevated, cursorColor = T.AccentCyan),
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = T.AccentPurple, unfocusedBorderColor = T.Border, focusedContainerColor = T.Surface, unfocusedContainerColor = T.Elevated, cursorColor = T.AccentPurple),
                 shape = RoundedCornerShape(8.dp)
             )
         }
@@ -1071,9 +1071,9 @@ fun SettingsTab(state: DashboardUiState, vm: DashboardViewModel) {
                 Text("Withdrawal izni KESİNLİKLE kapalı olmalı!", fontSize = 10.sp, color = T.ShortRed, fontFamily = Mono, fontWeight = FontWeight.SemiBold)
             }
             Spacer(Modifier.height(10.dp))
-            OutlinedTextField(value = apiKey, onValueChange = { apiKey = it }, modifier = Modifier.fillMaxWidth(), label = { Text("API Key", color = T.TextMuted) }, singleLine = true, leadingIcon = { Icon(Icons.Default.VpnKey, contentDescription = null, modifier = Modifier.size(16.dp), tint = T.TextMuted) }, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = T.BorderStrong, unfocusedBorderColor = T.Border, focusedContainerColor = T.Surface, unfocusedContainerColor = T.Surface, focusedTextColor = T.TextPrimary, unfocusedTextColor = T.TextPrimary, focusedLabelColor = T.TextSecondary, unfocusedLabelColor = T.TextMuted, cursorColor = T.AccentCyan), shape = RoundedCornerShape(8.dp))
+            OutlinedTextField(value = apiKey, onValueChange = { apiKey = it }, modifier = Modifier.fillMaxWidth(), label = { Text("API Key", color = T.TextMuted) }, singleLine = true, leadingIcon = { Icon(Icons.Default.VpnKey, contentDescription = null, modifier = Modifier.size(16.dp), tint = T.TextMuted) }, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = T.BorderStrong, unfocusedBorderColor = T.Border, focusedContainerColor = T.Surface, unfocusedContainerColor = T.Surface, focusedTextColor = T.TextPrimary, unfocusedTextColor = T.TextPrimary, focusedLabelColor = T.TextSecondary, unfocusedLabelColor = T.TextMuted, cursorColor = T.AccentPurple), shape = RoundedCornerShape(8.dp))
             Spacer(Modifier.height(8.dp))
-            OutlinedTextField(value = apiSecret, onValueChange = { apiSecret = it }, modifier = Modifier.fillMaxWidth(), label = { Text("API Secret", color = T.TextMuted) }, singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp), tint = T.TextMuted) }, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = T.BorderStrong, unfocusedBorderColor = T.Border, focusedContainerColor = T.Surface, unfocusedContainerColor = T.Surface, focusedTextColor = T.TextPrimary, unfocusedTextColor = T.TextPrimary, focusedLabelColor = T.TextSecondary, unfocusedLabelColor = T.TextMuted, cursorColor = T.AccentCyan), shape = RoundedCornerShape(8.dp))
+            OutlinedTextField(value = apiSecret, onValueChange = { apiSecret = it }, modifier = Modifier.fillMaxWidth(), label = { Text("API Secret", color = T.TextMuted) }, singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp), tint = T.TextMuted) }, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = T.BorderStrong, unfocusedBorderColor = T.Border, focusedContainerColor = T.Surface, unfocusedContainerColor = T.Surface, focusedTextColor = T.TextPrimary, unfocusedTextColor = T.TextPrimary, focusedLabelColor = T.TextSecondary, unfocusedLabelColor = T.TextMuted, cursorColor = T.AccentPurple), shape = RoundedCornerShape(8.dp))
             Spacer(Modifier.height(10.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { if (vm.saveCredentials(apiKey, apiSecret)) vm.setTradingMode(TradingMode.REAL) }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.buttonColors(containerColor = T.AccentPurple)) {
