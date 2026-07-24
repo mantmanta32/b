@@ -648,8 +648,7 @@ fun SettingsRow(state: DashboardUiState, vm: DashboardViewModel) {
                 Surface(
                     modifier = Modifier.fillMaxWidth().clickable { expanded = true },
                     shape = RoundedCornerShape(8.dp),
-                    color = T.Elevated,
-                    border = androidx.compose.foundation.border(1.dp, T.Border, RoundedCornerShape(8.dp)).let { Modifier }
+                    color = T.Elevated
                 ) {
                     Row(
                         modifier = Modifier
@@ -803,8 +802,7 @@ fun TerminalBottomNav(selectedTab: Int, onTabSelected: (Int) -> Unit) {
     NavigationBar(
         containerColor = T.Surface,
         contentColor = T.TextPrimary,
-        tonalElevation = 2.dp,
-        border = androidx.compose.foundation.BorderStroke(0.5.dp, T.Border)
+        tonalElevation = 2.dp
     ) {
         data class NavItem(val label: String, val activeIcon: ImageVector, val inactiveIcon: ImageVector)
         val items = listOf(
@@ -1175,13 +1173,14 @@ fun TerminalCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     Surface(
-        modifier = modifier,
+        modifier = modifier.border(0.5.dp, borderColor, RoundedCornerShape(CardRadius)),
         shape = RoundedCornerShape(CardRadius),
         color = containerColor,
-        border = androidx.compose.foundation.BorderStroke(0.5.dp, borderColor),
         tonalElevation = 1.dp
     ) {
-        Column(modifier = Modifier.padding(CardInnerPad), content = content)
+        Column(modifier = Modifier.padding(CardInnerPad)) {
+            content()
+        }
     }
 }
 
